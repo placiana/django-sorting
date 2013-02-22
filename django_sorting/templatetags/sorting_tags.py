@@ -80,7 +80,7 @@ def autosort(parser, token):
     bits = [b.strip('"\'') for b in token.split_contents()]
     if len(bits) != 2:
         raise TemplateSyntaxError, "autosort tag takes exactly one argument"
-    return SortedDataNode(bits[1])
+    return UnambiguousSortedDataNode(bits[1])
 
 class SortedDataNode(template.Node):
     """
@@ -97,6 +97,24 @@ class SortedDataNode(template.Node):
         if len(order_by) > 1:
             try:
                 context[key] = value.order_by(order_by)
+            except template.TemplateSyntaxError:
+                if INVALID_FIELD_RAISES_404:
+                    raise Http404('Invalid field sorting. If DEBUG were set to ' +
+                    'False, an HTTP 404 page would have been shown instead.')
+                context[key] = value
+        else:
+            context[key] = value
+
+        return ''
+
+class UnambiguousSortedDataNode(SortedDataNode):
+    def render(self, context):
+        key = self.queryset_var.var
+        value = self.queryset_var.resolve(context)
+        order_by = context['request'].field
+        if len(order_by) > 1:
+            try:
+                context[key] = value.order_by(order_by, 'id')
             except template.TemplateSyntaxError:
                 if INVALID_FIELD_RAISES_404:
                     raise Http404('Invalid field sorting. If DEBUG were set to ' +
